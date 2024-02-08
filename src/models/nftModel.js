@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const slugify = require("slugify");
 
 const nftSchema = new mongoose.Schema(
   {
@@ -8,6 +9,7 @@ const nftSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    slug: String,
     duration: {
       type: String,
       required: [true, "must provide duration"],
@@ -42,7 +44,16 @@ const nftSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Nft must have a price"],
     },
-    priceDiscount: Number,
+    priceDiscount: {
+      type: Number,
+      validate: {
+        validator: function (val) {
+          return val < this.price;
+        },
+        message:
+          "Discount price must be less than price. Please enter a lower amount.",
+      },
+    },
     imageCover: {
       type: String,
       required: [true, "Must provide an image url for the cover photo"],
@@ -52,8 +63,20 @@ const nftSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
+
+nftSchema.virtual("durationWeeks").get(function () {
+  return this.duration / 7;
+});
+
+//MONGOOSE MIDDLEWARE
+nftSchema.pre("save", function (next) {
+  this.slug = slugify(this.name, { lower: true });
+  next();
+});
 
 const NFT = mongoose.model("NFT", nftSchema);
 
