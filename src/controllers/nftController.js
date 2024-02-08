@@ -1,8 +1,15 @@
 const NFT = require("../models/nftModel");
+const APIFeatures = require("../utils/apiFeatures");
 
 const getAllNfts = async (req, res) => {
   try {
-    const nfts = await NFT.find();
+    const features = new APIFeatures(NFT.find(), req.query)
+      .filter()
+      .sort()
+      .fields()
+      .paginate();
+
+    const nfts = await features.query;
 
     res.status(200).json({
       status: "success",
@@ -12,6 +19,7 @@ const getAllNfts = async (req, res) => {
       },
     });
   } catch (error) {
+    console.log(error);
     res.status(500).json({
       status: "failure",
       message: "Internal Server Error",
@@ -132,10 +140,82 @@ const deleteNFT = async (req, res) => {
   }
 };
 
+const getNFTStats = async (req, res) => {
+  try {
+    const stats = await NFT.aggregate([
+      {
+        $match: { ratingsAverage: { $gte: 4.5 } }, // Filtering out all the NFTs that have a rating less than or equal to 4
+      },
+      {
+        $group: {
+          _id: "$difficulty",
+          avgRating: { $avg: "$ratingsAverage" },
+          avgPrice: { $avg: "$price" },
+          minPrice: { $min: "$price" },
+          maxPrice: { $max: "$price" },
+        },
+      },
+    ]);
+    res.status(200).json({
+      status: "success",
+      data: {
+        stats,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "failure",
+      message: "Internal Server Error",
+    });
+  }
+};
+
+const getMonthlyPlan = async (req, res) => {
+  try {
+    const year = req.params.year * 1;
+    const plan = await NFT.aggregate([
+      {
+        $unwind: "$startDates",
+      },
+      {
+        $match: {
+          startDates: {
+            $gte: new Date(`${year}-01-01`),
+            $lte: new Date(`${year}-12-31`),
+          },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $month: "$startDates",
+          },
+          nftCount: { $sum: 1 },
+          nfts: { $push: "$name" },
+        },
+      },
+    ]);
+    res.status(200).json({
+      status: "success",
+      results: plan.length,
+      data: {
+        plan,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      status: "failure",
+      message: "Internal Server Error",
+    });
+  }
+};
 module.exports = {
   getAllNfts,
   getSingleNFT,
   createNFT,
   updateNFT,
   deleteNFT,
+  getNFTStats,
+  getMonthlyPlan,
 };
